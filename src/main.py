@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from models import Generator, Discriminator, AdversarialLoss
 from dataset import ImageDataset
+import os
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
@@ -13,7 +14,6 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import datetime
 import wandb
-wandb.init("classicGAN", entity="lemolatoon")
 
 # type aliases
 Optimizer = torch.optim.Optimizer
@@ -61,16 +61,17 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
 
     n_epoch = 1000
 
-    wandb.config = {
+    config = {
         "learning_rate": lr,
         "beta_1": b1,
         "beta_2": b2,
-        "batch_size": len(dataloader),
+        "batch_size": dataloader.batch_size,
         "latent_dim": latent_dim,
-        "n_epoch": 1000,
+        "n_epoch": n_epoch,
         "height": height,
         "width": width,
     }
+    wandb.init("classicGAN", entity="lemolatoon", config=config)
 
     sample_interval_per_epoch = 3
     batches_done: int = 0
@@ -83,13 +84,21 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
         batches_done += len(dataloader)
 
         print(
-            "[Epoch %d/%d] [D loss: %f] [G loss: %f]"
+            "[Epoch {}/{}] [D loss: {}] [G loss: {}]"
             .format(epoch, n_epoch, d_losses[-1], g_losses[-1])
         )
 
         if epoch % sample_interval_per_epoch == 0:
-            save_image(
-                gen_imgs.data[:25], f"gen_samples/1{batches_done}.png", nrow=5, normalize=True)
+            try:
+                dir = "gen_samples/1/"
+                img_path = f"{dir}{batches_done}.png"
+                os.makedirs(dir, exist_ok=True)
+                save_image(
+                    gen_imgs.data[:25], img_path, nrow=5, normalize=True)
+                plt.imshow(plt.imread(img_path))
+                wandb.log({f"generated_samples.png": plt})
+            except:
+                print("image save failed.")
     return d_losses, g_losses
 
 
