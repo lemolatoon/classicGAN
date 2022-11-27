@@ -1,2 +1,6 @@
 1
 .venv
+.vscode
+images
+tmp
+wandb/
