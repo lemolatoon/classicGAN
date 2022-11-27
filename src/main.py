@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import torch
 import torch.nn as nn
 import numpy as np
@@ -26,14 +26,14 @@ def main():
     print(f"cuda available: {cuda}")
     # Get DataLoader
     batch_size = 128
-    resize_rate = 13
+    resize_rate = 11
     (img_channel, height, width) = (
         3, int(512 / resize_rate), int(768 / resize_rate))
     dataloader = getImageDataLoader("images/", height, width,
                                     batch_size=batch_size)
     d_losses, g_losses = train(dataloader, img_channel, height, width)
     draw_graph(d_losses, g_losses, batch_size,
-               f"fig/fig{datetime.datetime.now()}.png")
+               f"fig/fig{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.png")
 
 
 def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> Tuple[List[float], List[float]]:
@@ -74,13 +74,23 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
     wandb.init("classicGAN", entity="lemolatoon", config=config)
 
     sample_interval_per_epoch = 3
+    weight_save_interval_per_epoch = 3
     batches_done: int = 0
     for epoch in range(n_epoch):
         d_losses: List[float] = []
         g_losses: List[float] = []
 
-        gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
-                                  adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim)
+        if epoch % weight_save_interval_per_epoch == 0:
+            try:
+                dir = "weights/1/"
+                os.makedirs(dir, exist_ok=True)
+                gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
+                                          adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, save_model_dir=dir)
+            except:
+                print("weight save failed.")
+        else:
+            gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
+                                      adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim)
         batches_done += len(dataloader)
 
         print(
@@ -91,7 +101,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
         if epoch % sample_interval_per_epoch == 0:
             try:
                 dir = "gen_samples/1/"
-                img_path = f"{dir}{batches_done}.png"
+                img_path = f"{dir}{epoch}.png"
                 os.makedirs(dir, exist_ok=True)
                 save_image(
                     gen_imgs.data[:25], img_path, nrow=5, normalize=True)
@@ -102,7 +112,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
     return d_losses, g_losses
 
 
-def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: DataLoader, latent_dim: int) -> Tensor:
+def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: DataLoader, latent_dim: int, save_model_dir: Optional[str] = None) -> Tensor:
     """
     Return GenImages
     """
@@ -161,6 +171,15 @@ def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.M
             "d_loss": d_loss.item(),
             "g_loss": g_loss.item(),
         })
+
+    if save_model_dir is not None:
+        torch.save(generator.to("cpu").state_dict(),
+                   f"{save_model_dir}/generator_latest.pt")
+        torch.save(discriminator.to("cpu").state_dict(),
+                   f"{save_model_dir}/discriminator_latest.pt")
+        if cuda:
+            generator.cuda()
+            discriminator.cuda()
 
     return gen_imgs
 
