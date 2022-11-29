@@ -29,14 +29,17 @@ def main():
     resize_rate = 11
     (img_channel, height, width) = (
         3, int(512 / resize_rate), int(768 / resize_rate))
+    dir = get_dir("runs")
+    os.makedirs(dir, exist_ok=True)
     dataloader = getImageDataLoader("images/", height, width,
                                     batch_size=batch_size)
-    d_losses, g_losses = train(dataloader, img_channel, height, width)
+    d_losses, g_losses = train(
+        dataloader, img_channel, height, width, root_dir=dir)
     draw_graph(d_losses, g_losses, batch_size,
-               f"fig/fig{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.png")
+               f"{dir}/fig/g_d_loss.png")
 
 
-def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> Tuple[List[float], List[float]]:
+def train(dataloader: DataLoader, img_channel: int, height: int, width: int, root_dir: str) -> Tuple[List[float], List[float]]:
     # loss function
     adversarial_loss = AdversarialLoss()
 
@@ -82,7 +85,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
 
         if epoch % weight_save_interval_per_epoch == 0:
             try:
-                dir = "weights/1/"
+                dir = f"{root_dir}/weights/"
                 os.makedirs(dir, exist_ok=True)
                 gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
                                           adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, save_model_dir=dir)
@@ -100,7 +103,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
 
         if epoch % sample_interval_per_epoch == 0:
             try:
-                dir = "gen_samples/1/"
+                dir = f"{root_dir}/gen_samples/"
                 img_path = f"{dir}{epoch}.png"
                 os.makedirs(dir, exist_ok=True)
                 save_image(
@@ -219,6 +222,14 @@ def draw_graph(d_losses: List[float], g_losses: List[float], batch_size: int, sa
     plt.legend(loc="best")
     plt.show()
     plt.savefig(save_path)
+
+
+def get_dir(root_dir: str, prefix: str = "exp") -> str:
+    exp_idx_set = set()
+    for file_name in os.listdir(root_dir):
+        exp_idx_set.add(int(file_name[3:]))
+    current_max_idx = max(exp_idx_set)
+    return f"{root_dir}/{prefix}{current_max_idx + 1}/"
 
 
 if __name__ == "__main__":
