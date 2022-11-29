@@ -10,6 +10,10 @@ numpy = "*"
 tqdm = "*"
 matplotlib = "*"
 wandb = "*"
+mypy = "*"
+
+[scripts]
+tc =  "mypy --strict src"
 
 [dev-packages]
 

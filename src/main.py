@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TypedDict, Union, Literal
 import torch
 import torch.nn as nn
 import numpy as np
@@ -12,7 +12,7 @@ from torchvision.datasets import ImageFolder
 from torchvision.utils import save_image
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-import datetime
+from wandbTypes import sweepConfig, seep_config_with_default
 import wandb
 
 # type aliases
@@ -22,10 +22,17 @@ Tensor = torch.Tensor
 cuda: bool = True if torch.cuda.is_available() else False
 
 
+def sweepInit():
+    print(f"cuda available: {cuda}")
+    sweep_config = seep_config_with_default()
+    # print(sweep_config, flush=True)
+    sweep_id = wandb.sweep(sweep=sweep_config, project="classicGAN tune")
+    wandb.agent(sweep_id, function=_sweep_entry, count=10)
+
+
 def main():
     print(f"cuda available: {cuda}")
-    # Get DataLoader
-    batch_size = 128
+    batch_size = 32
     resize_rate = 11
     (img_channel, height, width) = (
         3, int(512 / resize_rate), int(768 / resize_rate))
@@ -39,7 +46,29 @@ def main():
                f"{dir}/fig/g_d_loss.png")
 
 
-def train(dataloader: DataLoader, img_channel: int, height: int, width: int, root_dir: str) -> Tuple[List[float], List[float]]:
+def _sweep_entry():
+    run = wandb.init()
+
+    print(run)
+
+    config: sweepConfig = wandb.config
+    print(config, flush=True)
+    # Get DataLoader
+    batch_size = config["batch_size"]
+    resize_rate = 11
+    (img_channel, height, width) = (
+        3, int(512 / resize_rate), int(768 / resize_rate))
+    dir = get_dir("runs")
+    os.makedirs(dir, exist_ok=True)
+    dataloader = getImageDataLoader("images/", height, width,
+                                    batch_size=batch_size)
+    d_losses, g_losses = train(
+        dataloader, img_channel, height, width, root_dir=dir, sweep_config=config)
+    draw_graph(d_losses, g_losses, batch_size,
+               f"{dir}/fig/g_d_loss.png")
+
+
+def train(dataloader: DataLoader, img_channel: int, height: int, width: int, root_dir: str, sweep_config: Optional[sweepConfig] = None) -> Tuple[List[float], List[float]]:
     # loss function
     adversarial_loss = AdversarialLoss()
 
@@ -57,12 +86,16 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
 
     # Optimizers
     (lr, b1, b2) = (0.0002, 0.5, 0.999)
+    if sweep_config is not None:
+        lr = sweep_config["lr"]
     optimizer_G = torch.optim.Adam(
         generator.parameters(), lr=lr, betas=(b1, b2))
     optimizer_D = torch.optim.Adam(
         discriminator.parameters(), lr=lr, betas=(b1, b2))
 
-    n_epoch = 1000
+    n_epoch = 200
+    if sweep_config is not None:
+        n_epoch = sweep_config["n_epoch"]
 
     config = {
         "learning_rate": lr,
@@ -74,7 +107,11 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
         "height": height,
         "width": width,
     }
-    wandb.init("classicGAN", entity="lemolatoon", config=config)
+    if sweep_config is None:
+        wandb.init("classicGAN", entity="lemolatoon", config=config)
+    else:
+        # wandb.log({"config": config})
+        pass
 
     sample_interval_per_epoch = 3
     weight_save_interval_per_epoch = 3
@@ -168,24 +205,27 @@ def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.M
         d_loss.backward()
         optimizer_D.step()
 
-        d_losses.append(d_loss.item())
-        g_losses.append(g_loss.item())
+        d_loss_item = d_loss.item()
+        g_loss_item = g_loss.item()
+        d_losses.append(d_loss_item)
+        g_losses.append(g_loss_item)
         wandb.log({
-            "d_loss": d_loss.item(),
-            "g_loss": g_loss.item(),
+            "d_loss": d_loss_item,
+            "g_loss": g_loss_item,
         })
 
     if save_model_dir is not None:
         try:
+            wandb.watch((generator, discriminator))
             torch.save(generator.to("cpu").state_dict(),
                        f"{save_model_dir}/generator_latest.pt")
             torch.save(discriminator.to("cpu").state_dict(),
                        f"{save_model_dir}/discriminator_latest.pt")
         except:
             print("weight save failed.")
-            if cuda:
-                generator.cuda()
-                discriminator.cuda()
+        if cuda:
+            generator.cuda()
+            discriminator.cuda()
 
     return gen_imgs
 
@@ -226,6 +266,7 @@ def draw_graph(d_losses: List[float], g_losses: List[float], batch_size: int, sa
 
 def get_dir(root_dir: str, prefix: str = "exp") -> str:
     exp_idx_set = set()
+    exp_idx_set.add(0)
     for file_name in os.listdir(root_dir):
         exp_idx_set.add(int(file_name[3:]))
     current_max_idx = max(exp_idx_set)
@@ -233,4 +274,5 @@ def get_dir(root_dir: str, prefix: str = "exp") -> str:
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    sweepInit()
