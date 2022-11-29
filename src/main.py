@@ -209,8 +209,6 @@ def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.M
         g_loss_item = g_loss.item()
         d_losses.append(d_loss_item)
         g_losses.append(g_loss_item)
-        print(d_losses)
-        print(g_losses)
         wandb.log({
             "d_loss": d_loss_item,
             "g_loss": g_loss_item,
