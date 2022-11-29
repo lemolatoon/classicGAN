@@ -76,9 +76,9 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int) -> 
     sample_interval_per_epoch = 3
     weight_save_interval_per_epoch = 3
     batches_done: int = 0
+    d_losses: List[float] = []
+    g_losses: List[float] = []
     for epoch in range(n_epoch):
-        d_losses: List[float] = []
-        g_losses: List[float] = []
 
         if epoch % weight_save_interval_per_epoch == 0:
             try:
@@ -173,13 +173,16 @@ def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.M
         })
 
     if save_model_dir is not None:
-        torch.save(generator.to("cpu").state_dict(),
-                   f"{save_model_dir}/generator_latest.pt")
-        torch.save(discriminator.to("cpu").state_dict(),
-                   f"{save_model_dir}/discriminator_latest.pt")
-        if cuda:
-            generator.cuda()
-            discriminator.cuda()
+        try:
+            torch.save(generator.to("cpu").state_dict(),
+                       f"{save_model_dir}/generator_latest.pt")
+            torch.save(discriminator.to("cpu").state_dict(),
+                       f"{save_model_dir}/discriminator_latest.pt")
+        except:
+            print("weight save failed.")
+            if cuda:
+                generator.cuda()
+                discriminator.cuda()
 
     return gen_imgs
 
