@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from wandbTypes import sweepConfig, seep_config_with_default
 import wandb
+import json
 
 # type aliases
 Optimizer = torch.optim.Optimizer
@@ -27,8 +28,7 @@ def sweepInit():
     sweep_config = seep_config_with_default()
     # print(sweep_config, flush=True)
     sweep_id = wandb.sweep(sweep=sweep_config, project="classicGAN tune")
-    wandb.agent(sweep_id, function=_sweep_entry, count=10)
-
+    wandb.agent(sweep_id, function=_sweep_entry, count=6)
 
 def main():
     print(f"cuda available: {cuda}")
@@ -107,6 +107,8 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
         "height": height,
         "width": width,
     }
+    with open(f"{root_dir}/config.json", mode="w") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
     if sweep_config is None:
         wandb.init("classicGAN", entity="lemolatoon", config=config)
     else:
