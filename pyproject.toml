@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "classicgan"
+version = "0.1.0"
+description = ""
+authors = ["lemolatoon <63438515+lemolatoon@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+torch = {url = "https://download.pytorch.org/whl/cu117/torch-1.13.0%2Bcu117-cp310-cp310-linux_x86_64.whl"}
+torchvision = {url = "https://download.pytorch.org/whl/cu117/torchvision-0.14.0%2Bcu117-cp310-cp310-linux_x86_64.whl"}
+numpy = "^1.24.1"
+tqdm = "^4.64.1"
+matplotlib = "^3.6.2"
+wandb = "^0.13.7"
+mypy = "^0.991"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
