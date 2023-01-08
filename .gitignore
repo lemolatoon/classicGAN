@@ -5,3 +5,4 @@ images
 tmp
 wandb/
 runs/
+*.pyc

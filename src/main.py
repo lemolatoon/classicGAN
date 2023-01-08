@@ -1,9 +1,11 @@
+import sys
+import traceback
 from typing import List, Optional, Tuple, TypedDict, Union, Literal
 import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
-from models import Generator, Discriminator, AdversarialLoss
+from models import DCDiscriminator, DCGenerator, Generator, Discriminator, AdversarialLoss
 from dataset import ImageDataset
 import os
 import torchvision.transforms as transforms
@@ -24,10 +26,11 @@ cuda: bool = True if torch.cuda.is_available() else False
 
 
 def sweepInit():
+    print("sweep init")
     print(f"cuda available: {cuda}")
     sweep_config = seep_config_with_default()
     # print(sweep_config, flush=True)
-    sweep_id = wandb.sweep(sweep=sweep_config, project="classicGAN tune")
+    sweep_id = wandb.sweep(sweep=sweep_config, project="classicDCGAN tune")
     wandb.agent(sweep_id, function=_sweep_entry, count=6)
 
 def main():
@@ -37,11 +40,12 @@ def main():
     (img_channel, height, width) = (
         3, int(512 / resize_rate), int(768 / resize_rate))
     dir = get_dir("runs")
+    print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
     dataloader = getImageDataLoader("images/", height, width,
                                     batch_size=batch_size)
     d_losses, g_losses = train(
-        dataloader, img_channel, height, width, root_dir=dir)
+        dataloader, img_channel, height, width, root_dir=dir, wandb_enabled=False)
     draw_graph(d_losses, g_losses, batch_size,
                f"{dir}/fig/g_d_loss.png")
 
@@ -59,6 +63,7 @@ def _sweep_entry():
     (img_channel, height, width) = (
         3, int(512 / resize_rate), int(768 / resize_rate))
     dir = get_dir("runs")
+    print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
     dataloader = getImageDataLoader("images/", height, width,
                                     batch_size=batch_size)
@@ -68,7 +73,8 @@ def _sweep_entry():
                f"{dir}/fig/g_d_loss.png")
 
 
-def train(dataloader: DataLoader, img_channel: int, height: int, width: int, root_dir: str, sweep_config: Optional[sweepConfig] = None) -> Tuple[List[float], List[float]]:
+def train(dataloader: DataLoader, img_channel: int, height: int, width: int, root_dir: str, sweep_config: Optional[sweepConfig] = None, wandb_enabled: bool = False) -> Tuple[List[float], List[float]]:
+    print("train started.")
     # loss function
     adversarial_loss = AdversarialLoss()
 
@@ -76,13 +82,15 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     latent_dim = 200
 
     # Initialize generator and discriminator
-    generator = Generator(latent_dim, img_channel, height, width)
-    discriminator = Discriminator(img_channel, height, width)
+    generator = DCGenerator(latent_dim, img_channel, height, width)
+    discriminator = DCDiscriminator(img_channel, height, width)
+    print(next(iter(dataloader))[0].shape)
     if cuda:
         dataloader
         generator.cuda()
         discriminator.cuda()
         adversarial_loss.cuda()
+    print("model initialized")
 
     # Optimizers
     (lr, b1, b2) = (0.0002, 0.5, 0.999)
@@ -109,7 +117,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     }
     with open(f"{root_dir}/config.json", mode="w") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
-    if sweep_config is None:
+    if sweep_config is None and wandb_enabled:
         wandb.init("classicGAN", entity="lemolatoon", config=config)
     else:
         # wandb.log({"config": config})
@@ -127,12 +135,14 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
                 dir = f"{root_dir}/weights/"
                 os.makedirs(dir, exist_ok=True)
                 gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
-                                          adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, save_model_dir=dir)
-            except:
+                                          adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, wandb_enabled, save_model_dir=dir)
+            except Exception:
+                print(traceback.format_exc())
+                print(sys.exc_info()[2])
                 print("weight save failed.")
         else:
             gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
-                                      adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim)
+                                      adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, wandb_enabled)
         batches_done += len(dataloader)
 
         print(
@@ -148,13 +158,14 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
                 save_image(
                     gen_imgs.data[:25], img_path, nrow=5, normalize=True)
                 plt.imshow(plt.imread(img_path))
-                wandb.log({f"generated_samples.png": plt})
+                if wandb_enabled:
+                    wandb.log({f"generated_samples.png": plt})
             except:
                 print("image save failed.")
     return d_losses, g_losses
 
 
-def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: DataLoader, latent_dim: int, save_model_dir: Optional[str] = None) -> Tensor:
+def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: DataLoader, latent_dim: int, wandb_enabled: bool, save_model_dir: Optional[str] = None) -> Tensor:
     """
     Return GenImages
     """
@@ -211,14 +222,16 @@ def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.M
         g_loss_item = g_loss.item()
         d_losses.append(d_loss_item)
         g_losses.append(g_loss_item)
-        wandb.log({
-            "d_loss": d_loss_item,
-            "g_loss": g_loss_item,
-        })
+        if wandb_enabled:
+            wandb.log({
+                "d_loss": d_loss_item,
+                "g_loss": g_loss_item,
+            })
 
     if save_model_dir is not None:
         try:
-            wandb.watch((generator, discriminator))
+            if wandb_enabled:
+                wandb.watch((generator, discriminator))
             torch.save(generator.to("cpu").state_dict(),
                        f"{save_model_dir}/generator_latest.pt")
             torch.save(discriminator.to("cpu").state_dict(),
