@@ -68,7 +68,7 @@ def _sweep_entry():
     dataloader = getImageDataLoader("images/", height, width,
                                     batch_size=batch_size)
     d_losses, g_losses = train(
-        dataloader, img_channel, height, width, root_dir=dir, sweep_config=config)
+        dataloader, img_channel, height, width, root_dir=dir, sweep_config=config, wandb_enabled=True)
     draw_graph(d_losses, g_losses, batch_size,
                f"{dir}/fig/g_d_loss.png")
 
