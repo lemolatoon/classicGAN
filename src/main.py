@@ -30,7 +30,8 @@ def sweepInit():
     print(f"cuda available: {cuda}")
     sweep_config = seep_config_with_default()
     # print(sweep_config, flush=True)
-    sweep_id = wandb.sweep(sweep=sweep_config, project="classicDCGAN tune")
+    dir_index = calc_next_dir_index("runs")
+    sweep_id = wandb.sweep(sweep=sweep_config, project=f"classicDCGAN tune {dir_index}")
     wandb.agent(sweep_id, function=_sweep_entry, count=6)
 
 def main():
@@ -84,7 +85,6 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     # Initialize generator and discriminator
     generator = DCGenerator(latent_dim, img_channel, height, width)
     discriminator = DCDiscriminator(img_channel, height, width)
-    print(next(iter(dataloader))[0].shape)
     if cuda:
         dataloader
         generator.cuda()
@@ -128,6 +128,9 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     batches_done: int = 0
     d_losses: List[float] = []
     g_losses: List[float] = []
+    print("=========START PROCESS ALL DATASET=========")
+    dataset = list(dataloader)
+    print("=========FINISH PROCESS ALL DATASET========")
     for epoch in range(n_epoch):
 
         if epoch % weight_save_interval_per_epoch == 0:
@@ -135,15 +138,15 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
                 dir = f"{root_dir}/weights/"
                 os.makedirs(dir, exist_ok=True)
                 gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
-                                          adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, wandb_enabled, save_model_dir=dir)
+                                          adversarial_loss, optimizer_G, optimizer_D, dataset, latent_dim, wandb_enabled, save_model_dir=dir)
             except Exception:
                 print(traceback.format_exc())
                 print(sys.exc_info()[2])
                 print("weight save failed.")
         else:
             gen_imgs = train_one_iter(d_losses, g_losses, generator, discriminator,
-                                      adversarial_loss, optimizer_G, optimizer_D, dataloader, latent_dim, wandb_enabled)
-        batches_done += len(dataloader)
+                                      adversarial_loss, optimizer_G, optimizer_D, dataset, latent_dim, wandb_enabled)
+        batches_done += len(dataset)
 
         print(
             "[Epoch {}/{}] [D loss: {}] [G loss: {}]"
@@ -165,7 +168,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     return d_losses, g_losses
 
 
-def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: DataLoader, latent_dim: int, wandb_enabled: bool, save_model_dir: Optional[str] = None) -> Tensor:
+def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: Union[DataLoader, List[Tuple[Tensor, int]]], latent_dim: int, wandb_enabled: bool, save_model_dir: Optional[str] = None) -> Tensor:
     """
     Return GenImages
     """
@@ -280,12 +283,16 @@ def draw_graph(d_losses: List[float], g_losses: List[float], batch_size: int, sa
 
 
 def get_dir(root_dir: str, prefix: str = "exp") -> str:
+    next_dir_index = calc_next_dir_index(root_dir, prefix)
+    return f"{root_dir}/{prefix}{next_dir_index}/"
+
+def calc_next_dir_index(root_dir: str, prefix: str = "exp") -> int:
     exp_idx_set = set()
     exp_idx_set.add(0)
     for file_name in os.listdir(root_dir):
         exp_idx_set.add(int(file_name[3:]))
     current_max_idx = max(exp_idx_set)
-    return f"{root_dir}/{prefix}{current_max_idx + 1}/"
+    return current_max_idx + 1
 
 
 if __name__ == "__main__":
