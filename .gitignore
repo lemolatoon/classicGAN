@@ -6,3 +6,5 @@ tmp
 wandb/
 runs/
 *.pyc
+src/pkl_cache/
+src/__pycache__/

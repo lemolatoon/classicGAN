@@ -1,6 +1,7 @@
+import itertools
 import sys
 import traceback
-from typing import List, Optional, Tuple, TypedDict, Union, Literal
+from typing import Iterable, List, Optional, Tuple, TypedDict, Union, Literal
 import torch
 import torch.nn as nn
 import numpy as np
@@ -17,6 +18,7 @@ from matplotlib.ticker import MaxNLocator
 from wandbTypes import sweepConfig, seep_config_with_default
 import wandb
 import json
+from util import pickle_hook 
 
 # type aliases
 Optimizer = torch.optim.Optimizer
@@ -38,15 +40,17 @@ def main():
     print(f"cuda available: {cuda}")
     batch_size = 32
     resize_rate = 11
+    process_image_size = lambda x: align_to(int(x / resize_rate), 8)
     (img_channel, height, width) = (
-        3, int(512 / resize_rate), int(768 / resize_rate))
+        3, process_image_size(512), process_image_size(768))
     dir = get_dir("runs")
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
-    dataloader = getImageDataLoader("images/", height, width,
-                                    batch_size=batch_size)
+    dataset = getCachedImageDataSetList("images/", height, width,
+                                    batch_size=batch_size, path_pkl="./src/pkl_cache/dataset.pkl")
     d_losses, g_losses = train(
-        dataloader, img_channel, height, width, root_dir=dir, wandb_enabled=False)
+        dataset, batch_size, img_channel, height, width, root_dir=dir, sweep_config=None, wandb_enabled=False)
+    os.makedirs(f"{dir}/fig", exist_ok=True)
     draw_graph(d_losses, g_losses, batch_size,
                f"{dir}/fig/g_d_loss.png")
 
@@ -72,15 +76,15 @@ def _sweep_entry():
     dir = get_dir("runs")
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
-    dataloader = getImageDataLoader("images/", height, width,
-                                    batch_size=batch_size)
+    dataset = getCachedImageDataSetList("images/", height, width,
+                                    batch_size=batch_size, path_pkl=".src/pkl_cache/dataset.pkl")
     d_losses, g_losses = train(
-        dataloader, img_channel, height, width, root_dir=dir, sweep_config=config, wandb_enabled=True)
+        dataset, batch_size,img_channel, height, width, root_dir=dir, sweep_config=config, wandb_enabled=True)
     draw_graph(d_losses, g_losses, batch_size,
                f"{dir}/fig/g_d_loss.png")
 
 
-def train(dataloader: DataLoader, img_channel: int, height: int, width: int, root_dir: str, sweep_config: Optional[sweepConfig] = None, wandb_enabled: bool = False) -> Tuple[List[float], List[float]]:
+def train(dataset: List[Tensor], batch_size: int,img_channel: int, height: int, width: int, root_dir: str, sweep_config: Optional[sweepConfig] = None, wandb_enabled: bool = False) -> Tuple[List[float], List[float]]:
     print("train started.")
     # loss function
     adversarial_loss = AdversarialLoss()
@@ -92,7 +96,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     generator = DCGenerator(latent_dim, img_channel, height, width)
     discriminator = DCDiscriminator(img_channel, height, width)
     if cuda:
-        dataloader
+        dataset
         generator.cuda()
         discriminator.cuda()
         adversarial_loss.cuda()
@@ -115,7 +119,7 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
         "learning_rate": lr,
         "beta_1": b1,
         "beta_2": b2,
-        "batch_size": dataloader.batch_size,
+        "batch_size": batch_size,
         "latent_dim": latent_dim,
         "n_epoch": n_epoch,
         "height": height,
@@ -134,10 +138,6 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     batches_done: int = 0
     d_losses: List[float] = []
     g_losses: List[float] = []
-    print("=========START PROCESS ALL DATASET=========")
-    # dataset = list(tqdm(dataloader))
-    dataset = dataloader
-    print("=========FINISH PROCESS ALL DATASET========")
     for epoch in range(n_epoch):
 
         if epoch % weight_save_interval_per_epoch == 0:
@@ -175,12 +175,12 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     return d_losses, g_losses
 
 
-def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataloader: Union[DataLoader, List[Tuple[Tensor, int]]], latent_dim: int, wandb_enabled: bool, save_model_dir: Optional[str] = None) -> Tensor:
+def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.Module, discriminator: nn.Module, adversial_loss: AdversarialLoss, optimizer_G: torch.optim.Optimizer, optimizer_D: torch.optim.Optimizer, dataset: List[Tensor], latent_dim: int, wandb_enabled: bool, save_model_dir: Optional[str] = None) -> Tensor:
     """
     Return GenImages
     """
     # DataLoader with no label (_)
-    for (real_imgs, _) in tqdm(dataloader):
+    for real_imgs in tqdm(dataset):
         real_imgs: Tensor
         batch_size = real_imgs.size(0)
         # Adversiarial ground truths
@@ -254,8 +254,14 @@ def train_one_iter(d_losses: List[float], g_losses: List[float], generator: nn.M
 
     return gen_imgs
 
+@pickle_hook
+def getCachedImageDataSetList(img_dir: str, height: int, width: int, batch_size: int = 128, path_pkl: str = "./src/pkl_cache/dataset.pkl") -> List[Tensor]:
+    print("=========START PROCESS ALL DATASET=========")
+    dataset = list(map(lambda x: x[0], tqdm(getImageDataLoader(img_dir, height, width, batch_size))))
+    print("=========FINISH PROCESS ALL DATASET========")
+    return dataset
 
-def getImageDataLoader(img_dir: str, height: int, width: int, batch_size: int = 128,) -> DataLoader:
+def getImageDataLoader(img_dir: str, height: int, width: int, batch_size: int = 128,) -> Iterable[Tuple[Tensor, int]]:
     transform = transforms.Compose(
         [transforms.Resize((height, width)),
          transforms.ToTensor(),
