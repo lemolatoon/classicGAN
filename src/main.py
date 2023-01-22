@@ -61,8 +61,10 @@ def _sweep_entry():
     # Get DataLoader
     batch_size = config["batch_size"]
     resize_rate = 11
+    image_length = max(int(512 / resize_rate), int(768 / resize_rate))
     (img_channel, height, width) = (
-        3, int(512 / resize_rate), int(768 / resize_rate))
+        3, image_length, image_length)
+    print(f"height: {height}, width :{width}")
     dir = get_dir("runs")
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
