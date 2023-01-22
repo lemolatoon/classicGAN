@@ -77,9 +77,10 @@ def _sweep_entry():
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
     dataset = getCachedImageDataSetList("images/", height, width,
-                                    batch_size=batch_size, path_pkl=".src/pkl_cache/dataset.pkl")
+                                    batch_size=batch_size, path_pkl="./src/pkl_cache/dataset.pkl")
     d_losses, g_losses = train(
         dataset, batch_size,img_channel, height, width, root_dir=dir, sweep_config=config, wandb_enabled=True)
+    os.makedirs(f"{dir}/fig", exist_ok=True)
     draw_graph(d_losses, g_losses, batch_size,
                f"{dir}/fig/g_d_loss.png")
 

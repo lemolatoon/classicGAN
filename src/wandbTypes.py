@@ -31,7 +31,7 @@ class defaultParameters(TypedDict):
     lr: parameterWithMaxMin
 
 
-lr_config = {"values": [10 ** (-n) for n in range(7, 9)]}
+lr_config = {"values": [10 ** (-n) for n in range(3, 9)]}
 def seep_config_with_default(method: str = "random", name: str = "sweep", metric: sweepMetric = {"goal": "minimize", "name": "g_loss"}, parameters: defaultParameters = {"batch_size": {"values": [32]}, "lr": lr_config, "n_epoch": {"values": [200]}}) -> sweepConfig:
     config: sweepConfig = {
         "method": method,
