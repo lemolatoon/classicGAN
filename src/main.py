@@ -50,19 +50,25 @@ def main():
     draw_graph(d_losses, g_losses, batch_size,
                f"{dir}/fig/g_d_loss.png")
 
+def align_to(num: int, alignment: int) -> int:
+    if num % alignment == 0:
+        return num
+    else:
+        return num + alignment - num % alignment
 
 def _sweep_entry():
     run = wandb.init()
 
-    print(run)
+
 
     config: sweepConfig = wandb.config
     print(config, flush=True)
     # Get DataLoader
     batch_size = config["batch_size"]
     resize_rate = 11
+    process_image_size = lambda x: align_to(int(x / resize_rate), 8)
     (img_channel, height, width) = (
-        3, int(512 / resize_rate), int(768 / resize_rate))
+        3, process_image_size(512), process_image_size(768))
     dir = get_dir("runs")
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
@@ -129,7 +135,8 @@ def train(dataloader: DataLoader, img_channel: int, height: int, width: int, roo
     d_losses: List[float] = []
     g_losses: List[float] = []
     print("=========START PROCESS ALL DATASET=========")
-    dataset = list(dataloader)
+    # dataset = list(tqdm(dataloader))
+    dataset = dataloader
     print("=========FINISH PROCESS ALL DATASET========")
     for epoch in range(n_epoch):
 

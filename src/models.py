@@ -7,15 +7,20 @@ class DCGenerator(nn.Module):
     def __init__(self, latent_dim: int, img_channel: int ,height: int, width: int):
         super(DCGenerator, self).__init__()
 
-        # 2 times `Upsample`
-        self.height = height // 4
-        self.width = width // 4
+        # 3 times `Upsample`
+        upsample_times = 3
+        self.height = height // (2 ** upsample_times) 
+        self.width = width // (2 ** upsample_times) 
         self.l1 = nn.Sequential(nn.Linear(latent_dim, 128 * self.height * self.width))
 
         # each `Conv2d` retains its shape like
         # (N, C, H, W) -> (N, C, H, W)
         self.conv_blocks = nn.Sequential(
             nn.BatchNorm2d(128),
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(128, 128, 3, stride=1, padding=1),
+            nn.BatchNorm2d(128, 0.8),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Upsample(scale_factor=2),
             nn.Conv2d(128, 128, 3, stride=1, padding=1),
             nn.BatchNorm2d(128, 0.8),
