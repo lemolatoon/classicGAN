@@ -38,7 +38,7 @@ def sweepInit():
 
 def main():
     print(f"cuda available: {cuda}")
-    batch_size = 32
+    batch_size = 1024
     resize_rate = 11
     process_image_size = lambda x: align_to(int(x / resize_rate), 8)
     (img_channel, height, width) = (
@@ -47,7 +47,7 @@ def main():
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
     dataset = getCachedImageDataSetList("images/", height, width,
-                                    batch_size=batch_size, path_pkl="./src/pkl_cache/dataset.pkl")
+                                    batch_size=batch_size, path_pkl=f"./src/pkl_cache/dataset_{height}_{width}_{batch_size}.pkl")
     d_losses, g_losses = train(
         dataset, batch_size, img_channel, height, width, root_dir=dir, sweep_config=None, wandb_enabled=False)
     os.makedirs(f"{dir}/fig", exist_ok=True)
@@ -77,7 +77,7 @@ def _sweep_entry():
     print(f"Will be saved in {dir}")
     os.makedirs(dir, exist_ok=True)
     dataset = getCachedImageDataSetList("images/", height, width,
-                                    batch_size=batch_size, path_pkl="./src/pkl_cache/dataset.pkl")
+                                    batch_size=batch_size, path_pkl=f"./src/pkl_cache/dataset_{height}_{width}_{batch_size}.pkl")
     d_losses, g_losses = train(
         dataset, batch_size,img_channel, height, width, root_dir=dir, sweep_config=config, wandb_enabled=True)
     os.makedirs(f"{dir}/fig", exist_ok=True)
