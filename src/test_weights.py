@@ -20,7 +20,7 @@ def main():
     latent_dim = 200
     dataset = getCachedImageDataSetList("images/", height, width,
                                     batch_size=1024, path_pkl=f"./src/pkl_cache/dataset_{height}_{width}_{1024}.pkl")
-    save_image(dataset[0][:25], "read_images.png", nrow=5)
+    save_image(dataset[0][:25], "real_images.png", nrow=5)
     model = DCGenerator(latent_dim, img_channel, height, width)
     model.load_state_dict(torch.load("runs/exp120/weights/generator_latest.pt"))
     dir = get_dir("vals")
@@ -45,7 +45,6 @@ def main():
         
         img: Tensor = make_grid(img, nrow=5, normalize=True)
         save_image(img, "generated_images.png", nrow=5)
-        return
         frames.append(torchvision.transforms.ToPILImage()(img.cpu()))
 
     frames[0].save(f"{dir}/gif.gif", save_all=True, append_images=frames[1:], optimize=False, duration=10, loop=0)
