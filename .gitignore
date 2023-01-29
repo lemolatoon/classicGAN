@@ -5,6 +5,7 @@ images
 tmp
 wandb/
 runs/
+vals/
 *.pyc
 src/pkl_cache/
 src/__pycache__/

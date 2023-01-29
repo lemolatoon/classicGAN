@@ -297,6 +297,7 @@ def draw_graph(d_losses: List[float], g_losses: List[float], batch_size: int, sa
 
 
 def get_dir(root_dir: str, prefix: str = "exp") -> str:
+    os.makedirs(root_dir, exist_ok=True)
     next_dir_index = calc_next_dir_index(root_dir, prefix)
     return f"{root_dir}/{prefix}{next_dir_index}/"
 
